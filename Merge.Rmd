@@ -65,6 +65,39 @@ chicago_clean <- chicago %>%
   )
 ```
 
+Standardize weather data
+```{r}
+weather_clean <- weather %>%
+  transmute(
+    year = Year,
+    marathon = Marathon,
+    high_temp = High.Temp,
+    low_temp = Low.Temp,
+    avg_temp = Day.Average.Temp,
+    precipitation = Precipitation,
+    dew_point = Average.Dew.Point,
+    wind_speed = Max.Wind.Speed,
+    visibility = Visibility,
+    sea_level_pressure = Sea.Level.Pressure
+  )
+```
+
+Standardize airquality data
+```{r}
+airquality_clean <- airquality %>%
+  transmute(
+    year = Year,
+    marathon = Marathon,
+    aqi = Overall.AQI.Value,
+    main_pollutant = Main.Pollutant,
+    co = as.numeric(CO),
+    ozone = as.numeric(Ozone),
+    pm10 = suppressWarnings(as.numeric(PM10)),
+    pm25 = as.numeric(PM2.5),
+    no2 = as.numeric(NO2)
+  )
+```
+
 Combine the marathon datasets
 ```{r}
 # using bind_rows so we can row-wise combine and have data for each runner
@@ -149,26 +182,14 @@ marathons_all <- marathons_all %>%
   filter(!is.na(chip_seconds))
 ```
 
-
-Next we need to compute average finishing times, group by: year, marathon, gender, performance group (will probably add performance group later)
-
-```{r}
-avg_times <- marathons_all %>%
-  group_by(year, marathon, gender) %>%
-  summarise(avg_chip_seconds = mean(chip_seconds, na.rm = TRUE), .groups = "drop")
-
-avg_times
-```
-
-
 Labeling Gender as 'male', 'female', or 'unknown', nonbinary falls under female
 
 ```{r}
-unique(avg_times$gender)
+unique(marathons_all$gender)
 ```
 
 ```{r}
-avg_times <- avg_times %>%
+marathons_all <- marathons_all %>%
   mutate(
     gender = tolower(gender),
     gender = case_when(
@@ -178,21 +199,89 @@ avg_times <- avg_times %>%
     )
   )
 
-table(avg_times$gender)
+table(marathons_all$gender)
 ```
 
-
-Removing unknowns since we have only 14 unknowns, which is less than 4% of the data set and they will not help the model and most likely add noise:
+Removing unknowns since we have only 56 unknowns, and they will not help the model and most likely add noise:
 ```{r}
-avg_times <- avg_times %>% 
+marathons_all <- marathons_all %>% 
   filter(gender != "unknown")
 
-table(avg_times$gender)
+table(marathons_all$gender)
 ```
 
+
+Next we need to compute average finishing times, group by: year, marathon, gender, performance group: 
+
+Adding performance subgroups based off quintile cutoffs:
+
+Elite = 0–20th percentile
+
+Competitive = 20–40th percentile
+
+Average = 40–60th percentile
+
+Recreational = 60–80th percentile
+
+Slow = 80–100th percentile
+
 ```{r}
+# Compute quintile cutoffs for each (marathon by year by gender)
+quintile_groups <- marathons_all %>%
+  filter(!is.na(chip_seconds),
+         gender %in% c("male", "female")) %>% 
+  group_by(marathon, year, gender) %>% 
+  mutate(
+    qtile = ntile(chip_seconds, 5),   # divides distribution into 5 equal groups
+    subgroup = case_when(
+      qtile == 1 ~ "elite",          # fastest 20%
+      qtile == 2 ~ "competitive",
+      qtile == 3 ~ "average",
+      qtile == 4 ~ "recreational",
+      qtile == 5 ~ "slow",           # slowest 20%
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  ungroup()
+```
+
+
+```{r}
+# order subgroubs from fastest to slowest
+quintile_groups <- quintile_groups %>%
+  mutate(
+    subgroup = factor(subgroup,
+                      levels = c("elite", "competitive", "average", "recreational", "slow"))
+  )
+
+
+# compute average finishing time per subgroup, adding number in each group to see if weighing needs to happen
+avg_times <- quintile_groups %>%
+  group_by(marathon, year, gender, subgroup) %>%
+  summarize(
+    avg_chip_seconds = mean(chip_seconds, na.rm = TRUE),
+    n = n(),
+    .groups = "drop"
+  )
+
 avg_times
 ```
 
+Left join weather_clean and airquailty_clean onto the cleaned marathon datasets
+```{r}
+final_data <- avg_times %>%
+  left_join(weather_clean, by = c("year", "marathon")) %>%
+  left_join(airquality_clean, by = c("year", "marathon"))
 
--> Next we need to merge the avg_times data set with the weather and airquality dataframes
+# move n (number of indivuduals represting each group) to the first column for neatness
+final_data <- final_data %>% 
+  select(n, everything())
+
+final_data
+```
+
+Export final data to csv
+```{r}
+#write_csv(final_data, "merged_marathon_data.csv")
+```
+
