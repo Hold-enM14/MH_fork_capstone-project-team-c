@@ -22,6 +22,13 @@ Can weather and environmental factors—such as temperature, wind speed, precipi
 
 **Predictions:**  Elite runners are expected to be less affected by challenging weather and air quality, competitive and slow runners will experience greater slowdowns as conditions worsen with slow runners experiencing greater slowdowns. Female runners will show slightly less performance declines under adverse weather and environmental conditions. Overall, favorable conditions—moderate temperatures, low humidity, and clean air are expected to be associated with faster finishing times for all groups.
 
+## Folder Structure 
+
+- `data`: contains the dataset and data dictionary 
+- `notebooks`: contains the R Markdown source files with all code and analysis. 
+- `reports`: contains all reports 
+- `README.md`: project overview 
+
 ## Team Members
 - Krisha Bugajski-Sharp
 - Meghan Holden
