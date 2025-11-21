@@ -27,6 +27,7 @@ Can weather and environmental factors—such as temperature, wind speed, precipi
 - `data`: contains the raw datasets, merged dataset, and data dictionary 
 - `notebooks`: contains the R Markdown source files with all code and analysis. 
 - `reports`: contains all reports 
+- `capstone-project-team-c.Rproj`: The RStudio Project file. Opening this file sets the project root
 - `README.md`: project overview 
 
 ## Team Members

@@ -6,6 +6,7 @@ date: "2025-11-14"
 
 libraries
 ```{r}
+library(here)
 library(dplyr)
 library(lubridate)
 library(readr)
@@ -13,15 +14,14 @@ library(tibble)
 library(knitr)
 ```
 
-
 Importing data
 ```{r}
-weather = read.csv("data/weather-data.csv")
-airquality = read.csv("data/air-quality-data.csv")
-boston = read.csv("data/boston-marathon-data.csv")
-chicago = read.csv("data/chicago-marathon-data.csv")
-nyc = read.csv("data/nyc-marathon-data.csv")
-berlin = read.csv("data/berlin-marathon-data.csv")
+weather = read.csv(here("data","raw-data","weather-data.csv"))
+airquality = read.csv(here("data","raw-data","air-quality-data.csv"))
+boston = read.csv(here("data","raw-data","boston-marathon-data.csv"))
+chicago = read.csv(here("data","raw-data","chicago-marathon-data.csv"))
+nyc = read.csv(here("data","raw-data","nyc-marathon-data.csv"))
+berlin = read.csv(here("data","raw-data","berlin-marathon-data.csv"))
 ```
 
 Taking a look at the datasets
@@ -282,24 +282,6 @@ final_data <- final_data %>%
   select(n, everything())
 
 final_data
-```
-
-Normalization on the continuous predictors (Keeping both sets (Before and after scaling) for the different models)
-```{r}
-# Find the continuous predictors
-continuous_vars <- c(
-  "high_temp", "low_temp", "avg_temp", "precipitation",
-  "dew_point", "wind_speed", "visibility", "sea_level_pressure",
-  "aqi", "co", "ozone", "pm10", "pm25", "no2"
-)
-
-# Standardize also knwon as z-score normalize the continuous predictors
-final_data_scaled <- final_data %>%
-  mutate(across(all_of(continuous_vars), ~ as.numeric(scale(.)), 
-                .names = "{.col}_scaled"))
-
-# Check results
-summary(final_data_scaled)
 ```
 
 Export final data to csv
