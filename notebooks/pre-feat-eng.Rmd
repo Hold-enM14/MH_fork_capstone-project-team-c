@@ -11,6 +11,7 @@ library(dplyr)
 library(knitr)
 library(tidyr)
 library(ggplot2)
+library(VIM)
 ```
 
 Importing the data
@@ -23,7 +24,7 @@ final_data <- read.csv(here("data", "merged_marathon_data.csv"))
 str(final_data)
 summary(final_data)
 ```
-
+Looking at the full dataset for missing values 
 ```{r}
 # missing values for visibility, co, pm10, pm2.5
 missing_summary <- final_data %>%
@@ -31,6 +32,52 @@ missing_summary <- final_data %>%
 
 knitr::kable(missing_summary, caption = "Missing Values per Variable")
 ```
+
+# Spliting the data so Berlin is used as a second case study to show how the method performs with missing data (whether successful or not).
+
+```{r}
+main_data <- final_data %>% filter(marathon != "Berlin")
+berlin_data <- final_data %>% filter(marathon == "Berlin")
+```
+
+```{r}
+# missing values
+missing_summary <- main_data %>%
+  summarise(across(everything(), ~sum(is.na(.))))
+
+knitr::kable(missing_summary, caption = "Missing Values per Variable")
+```
+
+Since PM10 has alot of missing values still, we will drop that column completely 
+```{r}
+main_data <- main_data %>%
+  select(-pm10) 
+```
+
+Since PM2.5 is often the main pollutant, we decided to use KNN imputation to fill missing PM2.5 values because it predicts missing data using similar rows without assuming a specific parametric relationship, preserves variance, and works well for our relatively small dataset while using correlations with other environmental variables
+```{r}
+# Impute missing PM2.5 values using 5 nearest neighbors
+main_data <- kNN(main_data, variable = "pm25", k = 5) # can change later to see whihc K gives best model preformace 
+
+# Check that missing values are filled
+summary(main_data$pm25)
+```
+# Getting data ready for Multiple Linear Regression model:
+Convert subgroup to ordered factor (for performance ranking) and other categorical variables to factors
+```{r}
+final_data <- final_data %>%
+  mutate(subgroup = factor(subgroup,
+                           levels = c("slow","recreational","average","competitive","elite"),
+                           ordered = TRUE),
+         gender = factor(gender),
+         marathon = factor(marathon),
+         main_pollutant = factor(main_pollutant))
+
+
+# look at structure
+str(final_data)
+```
+
 
 ```{r}
 # create supershoes control

@@ -215,56 +215,55 @@ table(marathons_all$gender)
 ```
 
 
-Next we need to compute average finishing times, group by: year, marathon, gender, performance group: 
-
-Adding performance subgroups based off quintile cutoffs:
-
-Elite = 0–20th percentile
-
-Competitive = 20–40th percentile
-
-Average = 40–60th percentile
-
-Recreational = 60–80th percentile
-
-Slow = 80–100th percentile
-
+Creating time_ratio and using histogram to create subgroups 
 ```{r}
-# Compute quintile cutoffs for each (marathon by year by gender)
-quintile_groups <- marathons_all %>%
-  filter(!is.na(chip_seconds),
-         gender %in% c("male", "female")) %>% 
-  group_by(marathon, year, gender) %>% 
+# Add winner_time for each marathon-year-gender
+runners <- marathons_all %>%
+  group_by(marathon, year, gender) %>%
+  mutate(winner_time = min(chip_seconds, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(time_ratio = chip_seconds / winner_time)
+
+# Create subgroups based on time_ratio
+runners <- runners %>%
   mutate(
-    qtile = ntile(chip_seconds, 5),   # divides distribution into 5 equal groups
     subgroup = case_when(
-      qtile == 1 ~ "elite",          # fastest 20%
-      qtile == 2 ~ "competitive",
-      qtile == 3 ~ "average",
-      qtile == 4 ~ "recreational",
-      qtile == 5 ~ "slow",           # slowest 20%
+      time_ratio <= 1.30 ~ "elite",
+      time_ratio > 1.30 & time_ratio <= 1.55 ~ "competitive",
+      time_ratio > 1.55 & time_ratio <= 1.80 ~ "average",
+      time_ratio > 1.80 & time_ratio <= 2.10 ~ "recreational",
+      time_ratio > 2.10 ~ "slow",
       TRUE ~ NA_character_
-    )
-  ) %>%
-  ungroup()
-```
-
-
-```{r}
-# order subgroubs from fastest to slowest
-quintile_groups <- quintile_groups %>%
-  mutate(
-    subgroup = factor(subgroup,
-                      levels = c("elite", "competitive", "average", "recreational", "slow"))
+    ),
+    subgroup = factor(subgroup, levels = c("elite", "competitive", "average", "recreational", "slow"))
   )
 
+ggplot(runners, aes(x = time_ratio, fill = gender)) +
+  geom_histogram(binwidth = 0.05, position = "dodge") +
+  scale_fill_manual(values = c("female" = "deeppink", "male" = "steelblue")) +
+  geom_vline(xintercept = c(1.3, 1.55, 1.80, 2.10), linetype = "dashed", color = "red") +
+  labs(
+    title = "Distribution of Runner Time Ratios to Winner by Gender",
+    x = "Time Ratio (Runner / Winner)",
+    y = "Count"
+  ) +
+  theme_minimal()
+```
 
-# compute average finishing time per subgroup, adding number in each group to see if weighing needs to happen
-avg_times <- quintile_groups %>%
+```{r}
+runners %>%
+  group_by(gender, subgroup) %>%
+  summarise(count = n()) %>%
+  arrange(gender, subgroup)
+```
+
+Compute average finishing time per subgroup
+```{r}
+avg_times <- runners %>%
   group_by(marathon, year, gender, subgroup) %>%
   summarize(
-    avg_chip_seconds = mean(chip_seconds, na.rm = TRUE),
-    n = n(),
+    n = n(),  # number of runners in each subgroup
+    avg_chip_seconds = mean(chip_seconds, na.rm = TRUE),  
     .groups = "drop"
   )
 
@@ -282,6 +281,7 @@ final_data <- final_data %>%
   select(n, everything())
 
 final_data
+str(final_data)
 ```
 
 Export final data to csv
