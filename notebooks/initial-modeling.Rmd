@@ -339,6 +339,8 @@ knitr::kable(
   caption = "Model Comparison Across All Subsets of Predictors"
 )
 ```
+Final Model Results Above
+
 
 
 
@@ -525,4 +527,5 @@ rf_r2   <- cor(rf_pred, y_test)^2
 
 rf_rmse
 rf_r2
+
 ```
