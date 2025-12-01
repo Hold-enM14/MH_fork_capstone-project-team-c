@@ -410,6 +410,14 @@ model_airbin <- lm(avg_chip_seconds ~ avg_temp + ozone_bin + pm25_bin + wind_spe
 model_ozone <- lm(avg_chip_seconds ~ avg_temp + ozone_bin + pm25 + wind_speed + temp_aqi_interaction,
                   data = train_data)
 
+# wind binned only
+model_wind <- lm(avg_chip_seconds ~ avg_temp + ozone + pm25 + wind_bin + temp_aqi_interaction,
+                 data = train_data)
+
+# wind + ozone + pm25 binned
+model_wind_air <- lm(avg_chip_seconds ~ avg_temp + ozone_bin + pm25_bin + wind_bin + temp_aqi_interaction,
+                     data = train_data)
+
 ```
 
 ```{r}
@@ -450,6 +458,9 @@ summary(model_temp)$r.squared
 summary(model_temp_ozone)$r.squared
 summary(model_airbin)$r.squared
 summary(model_ozone)$r.squared
+summary(model_wind)$r.squared
+summary(model_wind_air)$r.squared
+
 #Comparing AIC
 AIC(model_cont)
 AIC(model_bin)
@@ -457,6 +468,8 @@ AIC(model_temp)
 AIC(model_temp_ozone)
 AIC(model_airbin)
 AIC(model_ozone)
+AIC(model_wind)
+AIC(model_wind_air)
 ```
 
 ```{r}
@@ -493,6 +506,16 @@ cv_ozone <- train(avg_chip_seconds ~ avg_temp + ozone_bin + pm25 + wind_speed + 
                   data = train_data,
                   method = "lm",
                   trControl = train_control)
+
+cv_wind <- train(avg_chip_seconds ~ avg_temp + ozone + pm25 + wind_bin + temp_aqi_interaction,
+                 data = train_data,
+                 method = "lm",
+                 trControl = train_control)
+
+cv_wind_air <- train(avg_chip_seconds ~ avg_temp + ozone_bin + pm25_bin + wind_bin + temp_aqi_interaction,
+                     data = train_data,
+                     method = "lm",
+                     trControl = train_control)
 
 ```
 
@@ -541,6 +564,9 @@ cv_temp$results
 cv_temp_ozone$results
 cv_airbin$results
 cv_ozone$results
+cv_wind$results
+cv_wind_air$results
+
 ```
 
 
