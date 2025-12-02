@@ -223,6 +223,13 @@ plot(lm_initial_PM25bin, which = 2)   # Q–Q plot
 
 
 
+Modeling stopped here, what else is needed?
+
+
+
+
+
+
 
 
 
@@ -520,4 +527,5 @@ rf_rmse
 rf_r2
 
 ```
+
 
