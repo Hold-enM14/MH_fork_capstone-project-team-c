@@ -290,25 +290,58 @@ mae_xgb  <- mae(test_data$avg_chip_seconds, pred_xgb)
 c(RMSE = rmse_xgb, MAE = mae_xgb)
 ```
 
-Introduce cross validation hyperparameter tuning (ZD, KB)
+This represents the initial overfitting model prior to tuning (ZD, KB)
 ```{r}
 # Zack's original attempt
-# Introduce cross validation hyperparameter tuning
-#xgb_cv <- xgb.cv(
-#  data = dtrain,
-#  nrounds = 2000,
-#  nfold = 5,
-#  objective = "reg:squarederror",
-#  eta = 0.01,
-#  max_depth = 4,
-#  subsample = 0.8,
-#  colsample_bytree = 0.8,
-#  early_stopping_rounds = 50,
-#  verbose = 0 # mute iterations
-#)
 
-#xgb_cv$best_iteration
+xgb_cv_of <- xgb.cv(
+  data = dtrain,
+  nrounds = 2000,
+  nfold = 5,
+  objective = "reg:squarederror",
+  eta = 0.01,
+  max_depth = 4,
+  subsample = 0.8,
+  colsample_bytree = 0.8,
+  early_stopping_rounds = 50,
+  verbose = 0 # mute iterations
+)
 
+xgb_cv_of$best_iteration
+
+# Train model
+params_of <- list(
+  objective = "reg:squarederror",
+    eta = 0.01,
+    max_depth = 4,
+    subsample = 0.8,
+    colsample_bytree = 0.8
+)
+# Find best # of trees from cv
+best_xgb_of <- xgb.train(
+  params = params_of,
+  data = dtrain,
+  nrounds = xgb_cv_of$best_iteration #2000
+)
+```
+We can see that the XGBoost model performed best at 2000 trees according to cross-validation, with is hitting the max nrounds. 
+
+Checking to see if the model is overfitting (ZD, KB)
+```{r}
+# Overfitting?
+cv_rmse_of <- min(xgb_cv_of$evaluation_log$test_rmse_mean)
+train_rmse_of <- min(xgb_cv_of$evaluation_log$train_rmse_mean)
+
+data.frame(
+  Train_RMSE = train_rmse_of,
+  CV_RMSE = cv_rmse_of,
+  Test_RMSE = rmse_xgb
+)
+```
+We can see that the model is strongly overfitting because the train error (73) is alot lower than CV (188).
+
+Introduce cross validation hyperparameter tuning (ZD, KB)
+```{r}
 # Krisha's attempt tuned for overfitting
 set.seed(123)  # for reproducibility
 
@@ -502,6 +535,56 @@ c(RMSE = rmse_xgb_raw, MAE = mae_xgb_raw)
 ```
 We can see that without manual feature engineering or creating binned variables (where the model showed previously RMSE: 131.9877 and MAE: 101.7843),the XGBoost model achieves lower RMSE and MAE. This suggests that XGBoost is effectively capturing nonlinearities and interactions on its own, reducing the need for us to manually create them.
 
+This represents the initial overfitting model prior to tuning (ZD, KB)
+```{r}
+# Zack's original attempt
+
+xgb_cv_raw_of <- xgb.cv(
+  data = dtrain_raw,
+  nrounds = 2000,
+  nfold = 5,
+  objective = "reg:squarederror",
+  eta = 0.01,
+  max_depth = 4,
+  subsample = 0.8,
+  colsample_bytree = 0.8,
+  early_stopping_rounds = 50,
+  verbose = 0 # mute iterations
+)
+
+xgb_cv_raw_of$best_iteration
+
+# Train model
+params_raw_of <- list(
+  objective = "reg:squarederror",
+  eta = 0.01,
+  max_depth = 4,
+  subsample = 0.8,
+  colsample_bytree = 0.8
+)
+# Find best # of trees from cv
+best_xgb_raw_of <- xgb.train(
+  params = params_raw_of,
+  data = dtrain_raw,
+  nrounds = xgb_cv_raw_of$best_iteration 
+)
+```
+We can see that the XGBoost model performed best at 2000 trees according to cross-validation, with is hitting the max nrounds. 
+
+Checking to see if the model is overfitting (ZD, KB)
+```{r}
+# Overfitting?
+cv_rmse_raw_of <- min(xgb_cv_raw_of$evaluation_log$test_rmse_mean)
+train_rmse_raw_of <- min(xgb_cv_raw_of$evaluation_log$train_rmse_mean)
+
+data.frame(
+  Train_RMSE = train_rmse_raw_of,
+  CV_RMSE = cv_rmse_raw_of,
+  Test_RMSE = rmse_xgb_raw
+)
+```
+We can see that the model is strongly overfitting because the train error (84) is a lot lower than CV (208).
+
 Introduce cross validation hyperparameter tuning (ZD, KB)
 ```{r}
 set.seed(123)  # for reproducibility
@@ -596,7 +679,6 @@ data.frame(
 
 ```
 
-Originally we could see that the model was overfitting: There was a huge gap between Train_RMSE (15.07) and CV_RMSE (159.69) which means the model is overfitting the training data.
 
 We can now see that the model is no longer overfitting. 
 
