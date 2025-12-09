@@ -17,6 +17,7 @@ library(VIM)
 library(combinat)
 library(xgboost)
 library(Metrics)
+#library(SHAPforxgboost)
 ```
 
 # Importing the data (KB)
@@ -441,7 +442,7 @@ Import data (KB)
 final_data <- read.csv(here("data", "merged_marathon_data.csv"))
 ```
 
-Spit the data so Berlin is used as a second case study to show how the method performs with missing data (whether successful or not). (KB)
+Split the data so Berlin is used as a second case study to show how the method performs with missing data (whether successful or not). (KB)
 ```{r}
 main_data <- final_data %>% filter(marathon != "Berlin")
 berlin_data <- final_data %>% filter(marathon == "Berlin")
@@ -652,9 +653,9 @@ knitr::kable(model_compare, digits = 4,
              caption = " XGBoost (raw features)")
 ```
 
-We can see the same trend on the test set (where GXBoost with feature engineering showed RMSE: 131.9877 and MAE: 101.7843). This XGBoost model achieves lower RMSE and MAE. This suggests that XGBoost is effectively capturing nonlinearities and interactions on its own, reducing the need for us to manually create them.
+We can see the same trend on the test set (where XGBoost with feature engineering showed RMSE: 131.9877 and MAE: 101.7843). This XGBoost model achieves lower RMSE and MAE. This suggests that XGBoost is effectively capturing nonlinearities and interactions on its own, reducing the need for us to manually create them.
 
-Find Variable importance amongst XGBoost model, so we can see how it compares to the GXBoost that incudes feature enginnering and binning (ZD, KB)
+Find Variable importance amongst XGBoost model, so we can see how it compares to the XGBoost that incudes feature enginnering and binning (ZD, KB)
 ```{r}
 # Variable importance
 importance_raw <- xgb.importance(model = best_xgb_raw)
@@ -679,8 +680,92 @@ data.frame(
 
 ```
 
+(MH)
+
+```{r}
+eval_log <- xgb_cv_raw$evaluation_log
+
+ggplot(eval_log, aes(x = iter)) +
+geom_line(aes(y = train_rmse_mean, color = "Training")) +
+geom_line(aes(y = test_rmse_mean, color = "Cross-validation")) +
+labs(
+title = "Learning Curve: Training vs Cross-validation",
+x = "nrounds",
+y = "RMSE"
+) +
+scale_color_manual(values = c("Training" = "blue", "Cross-validation" = "red")) +
+theme_minimal()
+```
+
 
 We can now see that the model is no longer overfitting. 
+
+Implement SHAP (ZD)
+
+```{r}
+# SHAP
+library(SHAPforxgboost)   # we can move this library to the beginning after ensuring this chunk is needed
+# Compute SHAP values for the raw XGB model
+shap_values <- shap.values(
+  xgb_model = best_xgb_raw,
+  X_train = train_matrix_raw
+)
+
+shap_long <- shap.prep( # convert SHAP values to long format
+  xgb_model = best_xgb_raw,
+  X_train = train_matrix_raw
+)
+shap.plot.summary(shap_long)
+```
+
+SHAP values to left of 0 (negative) represent decreases in predicted finishing time, while SHAP values to the right of 0 (positive) represent increases in predicted finishing time.
+
+Marathon location proves to be important in determining race results. Elite runners strongly decreased in predicted finishing time, while slow runners strongly increased in predicted finishing time. Temperature, ozone, dew point, and PM2.5 influence finishing time but their effects are limited compared to the subgrouping impacts.
+
+(ZD)
+
+```{r}
+# PM2.5 effect by subgroup
+shap.plot.dependence(
+  shap_long,
+  x = "pm25",
+  color_feature = "subgroup"
+)
+```
+
+Low PM2.5 values equate to a minimal effect on finishing time. Moderate PM2.5 values display performance weakening. High PM2.5 values show that the model predicts faster times. Extremely high PM 2.5 values seem to lead to slower times for runners.
+
+(ZD)
+
+```{r}
+# Temperature effect by gender
+shap.plot.dependence(
+  shap_long,
+  x = "avg_temp",
+  color_feature = "gender"
+)
+```
+
+Temperature displays a much clearer impact than the PM2.5 results. At lower temperatures, the SHAP values are negative and ultimately predict a faster finishing time. At moderate temperatures, the effects are rather neutral. At higher temperatures, the SHAP values begin to rise, indicating a slower predicted finish. While extremely warm temperatures the SHAP values sharply increase the predicted finishing time by a rough average of 400 seconds. Generally speaking, colder temperatures appear to improve race time while warmer temperatures hinder race time.
+
+(ZD)
+
+```{r}
+shap_subgroup <- shap_long[grepl("subgroup", shap_long$variable), ]
+shap.plot.summary(shap_subgroup)
+```
+
+The most important features appear to be the slow and elite subgroups, the male gender, and marathon locations. Being in the slow subgroup adds approximately (1510) seconds to the predicted finishing time. Belonging to the elite group decreases predicted finishing time by roughly (918) seconds. There appears to be some weight to the NYC and Chicago marathons which likely indicates a more challenging running route. 
+
+(ZD)
+
+```{r}
+shap_gender <- shap_long[grepl("gender", shap_long$variable), ]
+shap.plot.summary(shap_gender)
+```
+
+Here we can see that Male runners are able to consistently decrease the predicted finishing time, while Female runners consistently increase in predicted finishing time, making Gender an influential predictor of finishing time. 
+
 
 Comparing all our models: (ZD, KB)
 ```{r}
@@ -706,7 +791,6 @@ knitr::kable(model_compare_train, digits = 4,
 
 ```
 
-
 # Looking at our Predictions: (KB)
 
 These results from the XGBoost (raw-features) model will help answer our predictions. 
@@ -714,7 +798,6 @@ These results from the XGBoost (raw-features) model will help answer our predict
 importance_raw <- xgb.importance(model = best_xgb_raw)
 importance_raw
 ```
-
 
 
 #Graphing gain, cover and frequency for best XGBoost (MH)
