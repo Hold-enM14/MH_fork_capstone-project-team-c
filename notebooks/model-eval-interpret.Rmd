@@ -799,6 +799,47 @@ importance_raw <- xgb.importance(model = best_xgb_raw)
 importance_raw
 ```
 
+Answering the prediction: Moderate temperatures, low humidity, and clean air will produce the fastest finishing times across all categories (Gasparetto & Nesseler, 2020) (KB)
+```{r}
+#Starting by preparing the data
+# Remove label
+train_features <- train_data_raw %>% 
+  select(-avg_chip_seconds)
+
+# Convert all cat variables to numeric
+cat_cols <- c("marathon", "gender", "subgroup", "main_pollutant")
+
+train_features <- train_features %>%
+  mutate(across(all_of(cat_cols), ~ as.numeric(as.factor(.))))
+
+train_labels <- train_data_raw$avg_chip_seconds
+
+# Function to predict xgb (using CHATgbt)
+predict_xgb <- function(model, newdata) {
+  newmat <- as.matrix(newdata)
+  predict(model, newmat)
+}
+
+# Build explainer 
+explainer_raw <- explain(
+  model = best_xgb_raw,
+  data = train_matrix_raw,
+  y = train_labels,
+  predict_function = predict_xgb,
+  label = "XGB_raw"
+)
+
+# Partial dependence plots
+pdp_temp <- partial_dependency(explainer_raw, variables = "avg_temp")
+plot(pdp_temp)
+
+pdp_pm25 <- partial_dependency(explainer_raw, variables = "pm25")
+plot(pdp_pm25)
+
+pdp_ozone <- partial_dependency(explainer_raw, variables = "ozone")
+plot(pdp_ozone)
+
+```
 
 #Graphing gain, cover and frequency for best XGBoost (MH)
 
