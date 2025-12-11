@@ -39,7 +39,7 @@ Now all characters are factors ready for modeling.
 # Add our 90/10 training/test split (ZD)
 ```{r}
 # split data into train and test
-set.seed(123)
+set.seed(42)
 
 train_index <- sample(1:nrow(main_data), size = 0.9 * nrow(main_data)) # use a 90/10 split
 
@@ -342,7 +342,128 @@ data.frame(
 ```
 We can see that the model is strongly overfitting because the train error (73) is alot lower than CV (188).
 
-Introduce cross validation hyperparameter tuning (ZD, KB)
+
+
+ADDING HERE (KB)
+
+
+Introduce cross validation hyperparameter tuning by first running a tuning loop (KB)
+```{r}
+params_grid <- expand.grid(
+  max_depth = c(4, 6),
+  min_child_weight = c(1, 3),
+  subsample = c(0.8),
+  colsample_bytree = c(0.8, 1.0),
+  eta = c(0.05, 0.1),
+  gamma = c(0)
+)
+
+results <- list()
+
+for(i in 1:nrow(params_grid)) {
+  params <- as.list(params_grid[i, ])
+  params$objective <- "reg:squarederror"
+  params$nthread <- parallel::detectCores()
+  
+  cv <- xgb.cv(
+    params = params,
+    data = dtrain,
+    nrounds = 1000,
+    nfold = 5,
+    early_stopping_rounds = 20,
+    verbose = FALSE
+  )
+  
+  results[[i]] <- list(
+    params = params,
+    best_rmse = min(cv$evaluation_log$test_rmse_mean),
+    best_iter = cv$best_iteration
+  )
+}
+```
+
+Next extract the best hyperparameters (KB)
+```{r}
+# Find the index of the combination with the lowest CV RMSE
+best_index <- which.min(sapply(results, function(x) x$best_rmse))
+
+# Get the best parameters
+best_params <- results[[best_index]]$params
+best_params
+
+# Get the best number of boosting rounds
+best_nrounds <- results[[best_index]]$best_iter
+best_nrounds
+
+```
+
+Running XGBoost model with feauters with the best hyperparameters (KB)
+```{r}
+# Train final XGBoost model
+xgb_model <- xgboost(
+  data = dtrain,
+  params = best_params,
+  nrounds = best_nrounds,   # Optimal rounds from CV
+  verbose = FALSE
+)
+
+
+# Predictions on train and test sets
+pred_train <- predict(xgb_model, dtrain)
+pred_test  <- predict(xgb_model, dtest)
+
+
+# Train metrics
+rmse_train <- rmse(train_data$avg_chip_seconds, pred_train)
+mae_train <- mae(train_data$avg_chip_seconds, pred_train)
+rss_train <- sum((train_data$avg_chip_seconds - pred_train)^2)
+tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds))^2)
+r2_train  <- 1 - rss_train / tss_train
+
+
+# CV RMSE from tuning
+cv_rmse <- results[[best_index]]$best_rmse
+
+
+# Test metrics
+rmse_test <- rmse(test_data$avg_chip_seconds, pred_test)
+mae_test  <- mae(test_data$avg_chip_seconds, pred_test)
+rss_test  <- sum((test_data$avg_chip_seconds - pred_test)^2)
+tss_test  <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)
+r2_test   <- 1 - rss_test / tss_test
+
+
+# Combine into a single table
+model_eval <- data.frame(
+  Metric = c("Train RMSE", "Train MAE", "Train R2",
+             "CV RMSE",
+             "Test RMSE", "Test MAE", "Test R2"),
+  Value  = c(rmse_train, mae_train, r2_train,
+             cv_rmse,
+             rmse_test, mae_test, r2_test)
+)
+
+# Display table
+knitr::kable(model_eval, digits = 4, caption = "XGBoost Model Best Hyperparameters - Overfitting Check (Train MAE & R2 included)")
+
+```
+The tuned XGBoost model reduces overfitting while maintaining high predictive accuracy, achieving strong performance on both the cross-validation and test sets. It provides a reliable and generalizable solution for this dataset.
+
+Check for varaibel importance (ZD, KB)
+```{r}
+# Variable importance amongst final XGBoosted model
+importance <- xgb.importance(model = xgb_model)
+print(importance)
+
+xgb.plot.importance(importance)
+```
+
+ENDED HERE(KB)
+
+
+
+
+
 ```{r}
 # Krisha's attempt tuned for overfitting
 set.seed(123)  # for reproducibility
@@ -527,7 +648,7 @@ We can see that the identifiers (subgroup, gender, marathon) and predictor (main
 Add our 90/10 training/test split (ZD, KB)
 ```{r}
 # split data into train and test
-set.seed(123)
+set.seed(42)
 
 train_index <- sample(1:nrow(main_data), size = 0.9 * nrow(main_data)) # use a 90/10 split
 
@@ -622,6 +743,129 @@ data.frame(
 )
 ```
 We can see that the model is strongly overfitting because the train error (84) is a lot lower than CV (208).
+
+
+
+ADDED HERE(KB)
+
+
+
+Introduce cross validation hyperparameter tuning by first running a tuning loop (KB)
+```{r}
+params_grid <- expand.grid(
+  max_depth = c(4, 6),
+  min_child_weight = c(1, 3),
+  subsample = c(0.8),
+  colsample_bytree = c(0.8, 1.0),
+  eta = c(0.05, 0.1),
+  gamma = c(0)
+)
+
+results_raw <- list()
+
+for(i in 1:nrow(params_grid)) {
+  params <- as.list(params_grid[i, ])
+  params$objective <- "reg:squarederror"
+  params$nthread <- parallel::detectCores()
+  
+  cv <- xgb.cv(
+    params = params,
+    data = dtrain_raw,
+    nrounds = 1000,
+    nfold = 5,
+    early_stopping_rounds = 20,
+    verbose = FALSE
+  )
+  
+  results_raw[[i]] <- list(
+    params = params,
+    best_rmse = min(cv$evaluation_log$test_rmse_mean),
+    best_iter = cv$best_iteration
+  )
+}
+```
+
+Next extract the best hyperparameters (KB)
+```{r}
+# Find the index of the combination with the lowest CV RMSE
+best_index_raw <- which.min(sapply(results_raw, function(x) x$best_rmse))
+
+# Get the best parameters
+best_params_raw <- results_raw[[best_index_raw]]$params
+best_params_raw
+
+# Get the best number of boosting rounds
+best_nrounds_raw <- results_raw[[best_index_raw]]$best_iter
+best_nrounds_raw
+
+```
+
+
+Running XGBoost model with feauters with the best hyperparameters (KB)
+```{r}
+# Train final XGBoost model
+xgb_raw_model <- xgboost(
+  data = dtrain_raw,
+  params = best_params_raw,
+  nrounds = best_nrounds_raw,   # Optimal rounds from CV
+  verbose = FALSE
+)
+
+
+# Predictions on train and test sets
+pred_train_raw <- predict(xgb_raw_model, dtrain_raw)
+pred_test_raw  <- predict(xgb_raw_model, dtest_raw)
+
+
+# Train metrics
+rmse_train <- rmse(train_data$avg_chip_seconds, pred_train_raw)
+mae_train <- mae(train_data$avg_chip_seconds, pred_train_raw)
+rss_train <- sum((train_data$avg_chip_seconds - pred_train_raw)^2)
+tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds))^2)
+r2_train  <- 1 - rss_train / tss_train
+
+
+# CV RMSE from tuning
+cv_rmse <- results_raw[[best_index_raw]]$best_rmse
+
+
+# Test metrics
+rmse_test <- rmse(test_data$avg_chip_seconds, pred_test_raw)
+mae_test  <- mae(test_data$avg_chip_seconds, pred_test_raw)
+rss_test  <- sum((test_data$avg_chip_seconds - pred_test_raw)^2)
+tss_test  <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)
+r2_test   <- 1 - rss_test / tss_test
+
+
+# Combine into a single table
+model_eval <- data.frame(
+  Metric = c("Train RMSE", "Train MAE", "Train R2",
+             "CV RMSE",
+             "Test RMSE", "Test MAE", "Test R2"),
+  Value  = c(rmse_train, mae_train, r2_train,
+             cv_rmse,
+             rmse_test, mae_test, r2_test)
+)
+
+# Display table
+knitr::kable(model_eval, digits = 4, caption = "XGBoost Model Best Hyperparameters - Overfitting Check (Train MAE & R2 included)")
+
+```
+The tuned XGBoost modelis better because it has much lower training, CV, and test errors (RMSE and MAE) and higher R2 values, indicating it fits the data well while still generalizing effectively to unseen data.
+
+Check for varaibel importance (ZD, KB)
+```{r}
+# Variable importance amongst final XGBoosted model
+importance <- xgb.importance(model = xgb_raw_model)
+print(importance)
+
+xgb.plot.importance(importance)
+```
+
+
+
+ENDED HERE (KB)
+
 
 Introduce cross validation hyperparameter tuning (ZD, KB)
 ```{r}
