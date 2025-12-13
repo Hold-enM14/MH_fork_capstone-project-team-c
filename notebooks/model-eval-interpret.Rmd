@@ -458,7 +458,7 @@ r2_train  <- 1 - rss_train / tss_train
 
 
 # CV RMSE from tuning
-cv_rmse <- results[[best_index]]$best_rmse
+cv_rmse <- 151.6136  # manually use the CV RMSE from previous results
 
 
 # Test metrics
@@ -798,104 +798,115 @@ To make sure our XGBoost raw features model is as accurate and reliable as possi
 
 
 ```{r}
-params_grid_raw <- expand.grid(
-  max_depth = c(2, 3, 4),
-  min_child_weight = c(3, 5, 10),
-  subsample = c(0.7, 0.8),
-  colsample_bytree = c(0.6, 0.8),
-  eta = c(0.05, 0.1),
-  gamma = c(0, 0.1),
-  lambda = c(0.5, 1),
-  alpha = c(0, 1)
-)
+#params_grid_raw <- expand.grid(
+#  max_depth = c(2, 3, 4),
+#  min_child_weight = c(3, 5, 10),
+#  subsample = c(0.7, 0.8),
+#  colsample_bytree = c(0.6, 0.8),
+#  eta = c(0.05, 0.1),
+#  gamma = c(0, 0.1),
+#  lambda = c(0.5, 1),
+#  alpha = c(0, 1)
+#)
 
-results_raw <- list()
+#results_raw <- list()
 
-for (i in 1:nrow(params_grid_raw)) {
+#for (i in 1:nrow(params_grid_raw)) {
   
-  params <- list(
-    objective = "reg:squarederror",
-    max_depth = params_grid_raw$max_depth[i],
-    min_child_weight = params_grid_raw$min_child_weight[i],
-    subsample = params_grid_raw$subsample[i],
-    colsample_bytree = params_grid_raw$colsample_bytree[i],
-    eta = params_grid_raw$eta[i],
-    gamma = params_grid_raw$gamma[i],
-    lambda = params_grid_raw$lambda[i],
-    alpha = params_grid_raw$alpha[i]
-  )
+#  params <- list(
+#    objective = "reg:squarederror",
+#    max_depth = params_grid_raw$max_depth[i],
+#     min_child_weight = params_grid_raw$min_child_weight[i],
+#    subsample = params_grid_raw$subsample[i],
+#    colsample_bytree = params_grid_raw$colsample_bytree[i],
+#    eta = params_grid_raw$eta[i],
+#    gamma = params_grid_raw$gamma[i],
+#    lambda = params_grid_raw$lambda[i],
+#    alpha = params_grid_raw$alpha[i]
+#  )
   
-  cv_raw <- xgb.cv(
-    params = params,
-    data = dtrain_raw,      # <<< RAW FEATURE MATRIX HERE
-    nrounds = 1500,
-    nfold = 5,
-    early_stopping_rounds = 30,
-    verbose = 0
-  )
+#  cv_raw <- xgb.cv(
+#    params = params,
+#    data = dtrain_raw,      
+#    nrounds = 1500,
+#    nfold = 5,
+#    early_stopping_rounds = 30,
+#    verbose = 0
+#  )
   
-  results_raw[[i]] <- list(
-    params = params,
-    best_rmse = min(cv_raw$evaluation_log$test_rmse_mean),
-    best_iter = cv_raw$best_iteration
-  )
-}
+#  results_raw[[i]] <- list(
+#    params = params,
+#    best_rmse = min(cv_raw$evaluation_log$test_rmse_mean),
+#    best_iter = cv_raw$best_iteration
+#  )
+#}
 
 ```
+
 
 Next extract the best hyperparameters (KB)
 ```{r}
 # Find the index of the combination with the lowest CV RMSE
-best_index_raw <- which.min(sapply(results_raw, function(x) x$best_rmse))
+#best_index_raw <- which.min(sapply(results_raw, function(x) x$best_rmse))
 
 # Get the best parameters
-best_params_raw <- results_raw[[best_index_raw]]$params
-best_params_raw
+#best_params_raw <- results_raw[[best_index_raw]]$params
+#best_params_raw
 
 # Get the best number of boosting rounds
-best_nrounds_raw <- results_raw[[best_index_raw]]$best_iter
-best_nrounds_raw
+#best_nrounds_raw <- results_raw[[best_index_raw]]$best_iter
+#best_nrounds_raw
 
 ```
 
 
-Running XGBoost model with raw features with the best hyperparameters (KB)
+Running XGBoost raw feature model with the best hyperparameters explicitly added, so you no longer need any tuning loop since it takes up a lot of time (KB)
 ```{r}
-set.seed(42)
+set.seed(123)
+
+# Set best hyperparameters directly
+best_params_raw <- list(
+  objective = "reg:squarederror",
+  max_depth = 4,
+  min_child_weight = 10,
+  subsample = 0.7,
+  colsample_bytree = 0.8,
+  eta = 0.1,
+  gamma = 0,
+  lambda = 1,
+  alpha = 0
+)
+
+best_nrounds_raw <- 1498  # optimal rounds from CV
 
 # Train final XGBoost model
 xgb_raw_model <- xgboost(
   data = dtrain_raw,
   params = best_params_raw,
-  nrounds = best_nrounds_raw,   # Optimal rounds from CV
+  nrounds = best_nrounds_raw,
   verbose = FALSE
 )
-
 
 # Predictions on train and test sets
 pred_train_raw <- predict(xgb_raw_model, dtrain_raw)
 pred_test_raw  <- predict(xgb_raw_model, dtest_raw)
 
+# Train metrics (use train_data_raw)
+rmse_train <- rmse(train_data_raw$avg_chip_seconds, pred_train_raw)
+mae_train  <- mae(train_data_raw$avg_chip_seconds, pred_train_raw)
+rss_train  <- sum((train_data_raw$avg_chip_seconds - pred_train_raw)^2)
+tss_train  <- sum((train_data_raw$avg_chip_seconds - mean(train_data_raw$avg_chip_seconds))^2)
+r2_train   <- 1 - rss_train / tss_train
 
-# Train metrics
-rmse_train <- rmse(train_data$avg_chip_seconds, pred_train_raw)
-mae_train <- mae(train_data$avg_chip_seconds, pred_train_raw)
-rss_train <- sum((train_data$avg_chip_seconds - pred_train_raw)^2)
-tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds))^2)
-r2_train  <- 1 - rss_train / tss_train
+# CV RMSE from previous tuning
+cv_rmse <- 164.6655  # manually use CV RMSE from previous results
 
-
-# CV RMSE from tuning
-cv_rmse <- results_raw[[best_index_raw]]$best_rmse
-
-
-# Test metrics
-rmse_test <- rmse(test_data$avg_chip_seconds, pred_test_raw)
-mae_test  <- mae(test_data$avg_chip_seconds, pred_test_raw)
-rss_test  <- sum((test_data$avg_chip_seconds - pred_test_raw)^2)
-tss_test  <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)
+# Test metrics (use test_data_raw)
+rmse_test <- rmse(test_data_raw$avg_chip_seconds, pred_test_raw)
+mae_test  <- mae(test_data_raw$avg_chip_seconds, pred_test_raw)
+rss_test  <- sum((test_data_raw$avg_chip_seconds - pred_test_raw)^2)
+tss_test  <- sum((test_data_raw$avg_chip_seconds - mean(test_data_raw$avg_chip_seconds))^2)
 r2_test   <- 1 - rss_test / tss_test
-
 
 # Combine into a single table
 model_eval <- data.frame(
@@ -908,19 +919,25 @@ model_eval <- data.frame(
 )
 
 # Display table
-knitr::kable(model_eval, digits = 4, caption = "XGBoost Raw-Feature Model Best Hyperparameters - Overfitting Check (Train MAE & R2 included)")
+knitr::kable(
+  model_eval, 
+  digits = 4, 
+  caption = "XGBoost Raw-Feature Model Best Hyperparameters - Overfitting Check (Train MAE & R2 included)"
+)
 
 ```
-We can see that the model is not overfitting severely, only to a reasonable extent (Train RMSE ≈ 44.9, Test RMSE ≈ 150.6). The gap between train and test performance is expected and much smaller than in the earlier model.This indicates that regularization and tuning have helped reduce the degree of overfitting.
 
-We also can see that the cross validation error is very similar to the test error (CV RMSE ≈ 164.7, Test RMSE ≈ 150.6). This is good because it means that the model is stable across folds, the cross-validation process is reliable, and the model is generalizing consistently. This also means that there is no obvious data leakage.
+After tuning, our XGBoost model shows substantial improvement over the baseline, but some caution is still warranted regarding overfitting, so care should be taken when interpreting training performance metrics.
 
-In addition, both R2 scores show that the model fits the data extremely well (Train R² ≈ 0.9998, Test R² ≈ 0.9982). The almost perfect R2 is likely due to the subgroup structure, rather than overfitting.
+We can see that the model is not overfitting severely, only to a reasonable extent (Train RMSE ≈ 43.9, Test RMSE ≈ 137.1). The gap between train and test performance is expected and much smaller than in the baseline model. This indicates that regularization and tuning have helped reduce the degree of overfitting.
 
-Overall, the tuned model clearly outperforms the baseline model. The baseline had a Test RMSE of about 161.6, whereas the tuned model achieves 150.6, which is a meaningful improvement in accuracy. This represents roughly a 7% reduction in test error, showing that the tuning loop successfully improved generalization and stability.
+We also can see that the cross validation error is very similar to the test error (CV RMSE ≈ 164.7, Test RMSE ≈ 137.1). This is good because it means that the model is stable across folds, the cross-validation process is reliable, and the model is generalizing consistently. This also means that there is no obvious data leakage.
 
+In addition, both R² scores show that the model fits the data extremely well (Train R² ≈ 0.9998, Test R² ≈ 0.9985). The almost perfect R² is likely due to the subgroup structure, rather than overfitting.
 
-Check for varaibel importance (ZD, KB)
+Overall, the tuned model clearly outperforms the baseline model. The baseline had a Test RMSE of about 161.6, whereas the tuned model achieves 137.1, which is a meaningful improvement in accuracy. This represents roughly a 15% reduction in test error, showing that the tuning loop successfully improved generalization and stability.
+
+Check for variable importance (ZD, KB)
 ```{r}
 # Variable importance amongst final XGBoosted model
 importance <- xgb.importance(model = xgb_raw_model)
@@ -929,11 +946,50 @@ print(importance)
 xgb.plot.importance(importance)
 ```
 
+# Comparison of models (KB)
+
+```{r}
+# Comparison table of Raw vs Engineered XGBoost models
+comparison_table <- data.frame(
+  Metric = c(
+    "Train RMSE", "Train MAE", "Train R²",
+    "CV RMSE",
+    "Test RMSE", "Test MAE", "Test R²"
+  ),
+  Raw_Feature_Model = c(
+    43.8937, 33.2543, 0.9998,
+    164.6655,
+    137.1042, 93.8278, 0.9985
+  ),
+  Engineered_Feature_Model = c(
+    37.4778, 27.8817, 0.9999,
+    151.6136,
+    142.9413, 95.4914, 0.9983
+  )
+)
+
+# Display table
+knitr::kable(
+  comparison_table,
+  digits = 4,
+  caption = "Comparison of XGBoost Raw-Feature vs Engineered-Feature Models"
+)
+
+```
+
+After evaluating both the raw-feature and engineered-feature XGBoost models, we can see some clear differences in performance/stability.
+
+The engineered-feature model has a lower training error (Train RMSE ≈ 37.48, Train MAE ≈ 27.88) and slightly better cross-validation performance (CV RMSE ≈ 151.61) compared to the raw-feature model (Train RMSE ≈ 43.89, Train MAE ≈ 33.25, CV RMSE ≈ 164.67). This means that the engineered features help the model fit the training data more accurately and generalize more consistently across folds.
+
+Interestingly, the raw-feature model shows slightly better test performance (Test RMSE ≈ 137.10, Test MAE ≈ 93.83) than the engineered-feature model (Test RMSE ≈ 142.94, Test MAE ≈ 95.49). However, its higher CV RMSE suggests that this improvement might be due to other things, possibly the variability in the specific train-test split. This makes it potentially less stable across different subsets of the data.
+
+Both models have extremely high R2 on the training and test sets (≈0.998–0.999). This means that they are able to capture nearly all variability in the target. Overall, the engineered-feature model is recommended if stability and consistent generalization are priorities, while the raw-feature model may give slightly lower observed test error in this particular split but could be less reliable on new data.
+
 
 
 ENDED HERE (KB)
 
-
+(probably dont need this since i guest the parameters (KB))
 Introduce cross validation hyperparameter tuning (ZD, KB)
 ```{r}
 set.seed(123)  # for reproducibility
