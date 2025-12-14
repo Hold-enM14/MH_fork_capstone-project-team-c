@@ -1720,8 +1720,8 @@ rmse_train <- rmse(train_data$avg_chip_seconds, pred_train_xgb)
 mae_train  <- mae(train_data$avg_chip_seconds, pred_train_xgb)
 
 # Testing metrics
-rmse_xgb <- rmse(test_data$avg_chip_seconds, pred_test_xgb)
-mae_xgb  <- mae(test_data$avg_chip_seconds, pred_test_xgb)
+rmse_test <- rmse(test_data$avg_chip_seconds, pred_test_xgb)
+mae_test  <- mae(test_data$avg_chip_seconds, pred_test_xgb)
 
 # Calculate R-squared for train data
 rss_train <- sum((train_data$avg_chip_seconds - pred_train_xgb)^2)
@@ -1729,9 +1729,9 @@ tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds
 r2_train <- 1 - (rss_train / tss_train)
 
 # Calculate R-squared for test data
-rss_test <- sum((test_data$avg_chip_seconds - pred_xgb)^2)  # Residual sum of squares
+rss_test <- sum((test_data$avg_chip_seconds - pred_train_xgb)^2)  # Residual sum of squares
 tss_test <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)  # Total sum of squares
-r2_xgb <- 1 - (rss / tss)
+r2_test <- 1 - (rss_test / tss_test)
 
 
 # Combine metrics into a single table
@@ -2264,91 +2264,141 @@ berlin_data$pm25_bin  <- factor(ifelse(berlin_data$pm25 >= 54, 1, 0), levels = c
 berlin_data <- berlin_data[, !(names(berlin_data) %in% c("ozone"))]
 berlin_data  <- berlin_data[, !(names(berlin_data) %in% c("pm25"))]
 
+str(berlin_data)
+
 ```
+
+Drop unavailable predictors (KB)
+The Berlin marathon lacked complete data for some predictors (marathon identifier and CO concentration), these variables were removed from both the training and Berlin datasets to ensure consistent feature spaces and valid outo f sample prediction.
+```{r}
+bad_cols <- c("marathon", "co")
+
+train_data_clean <- train_data %>%
+  select(-all_of(bad_cols))
+
+berlin_data_clean <- berlin_data %>%
+  select(-all_of(bad_cols))
+
+```
+
+Rebuild the training model matrix and retrain model (KB)
+
+Factor levels for categorical predictors were explicitly aligned between the training and Berlin datasets to ensure consistent feature encoding and valid out-of-sample prediction. 
+
+**NOTE:** Using train_matrix_clean as a template.
+```{r}
+# Rebuild training model matrix
+train_matrix_clean <- model.matrix(
+  avg_chip_seconds ~ .,
+  data = train_data_clean %>% select(-year, -n)
+)[, -1]
+
+# Ensure colnames exist
+stopifnot(!is.null(colnames(train_matrix_clean)))
+
+# Create DMatrix
+dtrain_clean <- xgb.DMatrix(
+  data = train_matrix_clean,
+  label = train_data_clean$avg_chip_seconds
+)
+
+# Set seed for reproducibility
+set.seed(123)
+
+# Train model
+xgb_model <- xgb.train(
+  params = best_params, # from previous feature engineered XGBoost model
+  data = dtrain_clean,
+  nrounds = best_nrounds,
+  verbose = 0
+)
+```
+
 
 Align all factor variables in Berlin that were using in the train data so that the XGBoost model can process the data. (KB) 
 ```{r}
-# Align marathon
-berlin_data$marathon <- factor(
-  berlin_data$marathon,
-  levels = levels(train_data$marathon)  # 3 levels from training 
+# Align all categorical predictors
+berlin_data_clean$gender <- factor(
+  berlin_data_clean$gender,
+  levels = levels(train_data_clean$gender)
 )
 
-# Align gender
-berlin_data$gender <- factor(
-  berlin_data$gender,
-  levels = levels(train_data$gender)
+berlin_data_clean$subgroup <- factor(
+  berlin_data_clean$subgroup,
+  levels = levels(train_data_clean$subgroup)
 )
 
-# Align subgroup
-berlin_data$subgroup <- factor(
-  berlin_data$subgroup,
-  levels = levels(train_data$subgroup)
+berlin_data_clean$supershoe <- factor(
+  berlin_data_clean$supershoe,
+  levels = levels(train_data_clean$supershoe)
 )
 
-# Align supershoe
-berlin_data$supershoe <- factor(
-  berlin_data$supershoe,
-  levels = levels(train_data$supershoe)
+berlin_data_clean$ozone_bin <- factor(
+  berlin_data_clean$ozone_bin,
+  levels = levels(train_data_clean$ozone_bin)
 )
 
-# Align ozone_bin
-berlin_data$ozone_bin <- factor(
-  berlin_data$ozone_bin,
-  levels = levels(train_data$ozone_bin)
+berlin_data_clean$pm25_bin <- factor(
+  berlin_data_clean$pm25_bin,
+  levels = levels(train_data_clean$pm25_bin)
 )
 
-# Align pm25_bin
-berlin_data$pm25_bin <- factor(
-  berlin_data$pm25_bin,
-  levels = levels(train_data$pm25_bin)
-)
 
 ```
 
-## Build the XGBoost model for Berlin test data (KB)
+## Build and align Berlin matrix (KB)
+
+Filter Berlin data to complete cases (KB)
 ```{r}
-# Build model matrix using same formula as training
+berlin_mm <- model.matrix(
+  avg_chip_seconds ~ .,
+  data = berlin_data_clean %>% select(-year, -n)
+)
+
+# Identify rows used by model.matrix
+rows_used <- attr(berlin_mm, "assign") != 0  # not reliable
+
+# Restrict Berlin data to complete cases
+berlin_cc <- berlin_data_clean %>%
+  select(-year, -n) %>%
+  filter(complete.cases(.))
+
+```
+
+Build Berlin model matrix (KB)
+```{r}
 berlin_matrix <- model.matrix(
   avg_chip_seconds ~ .,
-  data = berlin_data %>% select(-year, -n)
-)
+  data = berlin_cc
+)[, -1]
+```
 
-# Drop intercept column
-berlin_matrix <- berlin_matrix[, -1]
+Align Berlin to training feature space (KB)
+```{r}
+# Align Berlin columns to the training matrix
+berlin_matrix <- berlin_matrix[, colnames(train_matrix_clean), drop = FALSE]
 
+# Sanity check
+stopifnot(identical(colnames(berlin_matrix), colnames(train_matrix_clean)))
+```
 
-# Align Berlin matrix columns with training matrix
-train_matrix <- model.matrix(
-  avg_chip_seconds ~ .,
-  data = train_data %>% select(-year, -n)
-)
-
-train_matrix <- train_matrix[, -1]
-
-# Keep only columns seen during training, in same order
-berlin_matrix <- berlin_matrix[, colnames(train_matrix), drop = FALSE]
-
-
-# Convert to DMatrix
+Predict and evaluate on Berlin data (KB)
+```{r}
 dberlin <- xgb.DMatrix(data = berlin_matrix)
-
-
-# Generate predictions
 pred_berlin <- predict(xgb_model, dberlin)
 
+# Only use rows actually in berlin_matrix
+actual_berlin <- berlin_cc$avg_chip_seconds
+stopifnot(length(actual_berlin) == length(pred_berlin))
 
-# Evaluate Berlin performance
+rmse_berlin <- rmse(actual_berlin, pred_berlin)
+mae_berlin  <- mae(actual_berlin, pred_berlin)
 
-rmse_berlin <- rmse(berlin_data$avg_chip_seconds, pred_berlin)
-mae_berlin  <- mae(berlin_data$avg_chip_seconds, pred_berlin)
-
-rss_berlin <- sum((berlin_data$avg_chip_seconds - pred_berlin)^2)
-tss_berlin <- sum((berlin_data$avg_chip_seconds - mean(berlin_data$avg_chip_seconds))^2)
+rss_berlin <- sum((actual_berlin - pred_berlin)^2)
+tss_berlin <- sum((actual_berlin - mean(actual_berlin))^2)
 r2_berlin  <- 1 - rss_berlin / tss_berlin
 
-
-# Results
+# Results table
 berlin_eval <- data.frame(
   Metric = c("RMSE", "MAE", "R²"),
   Value  = c(rmse_berlin, mae_berlin, r2_berlin)
@@ -2360,9 +2410,26 @@ knitr::kable(
   caption = "XGBoost Engineered-Feature Model Performance on Berlin Test Data"
 )
 
+# Show how many rows were dropped
+cat("Total Berlin rows:", nrow(berlin_data_clean), "\n")
+cat("Rows used for prediction (complete cases):", nrow(berlin_cc), "\n")
+cat("Rows dropped due to missing predictors:", nrow(berlin_data_clean) - nrow(berlin_cc), "\n")
 ```
+We can see that the results indicate that the XGBoost engineered-feature model predicts average chip times for Berlin marathon runners with high accuracy on the subset of data with complete predictor information. The R2 of 0.9174 shows that over 91% of the variance in actual chip times is explained by the model.
 
-(TRYING TO MAKE THIS WORK(KB))
+Out of 235 total Berlin observations, only 60 rows (or around 26%) were actually used for prediction. 175 rows (or around 74%) were dropped due to missing values in predictors. This is a substantial portion of the dataset, which means the evaluation metrics reflect model performance only on the complete-case subset.
+
+**Note:** The reported performance may not fully represent how the model would perform on the entire Berlin dataset, so caution should be used when generalizing these results.
+
+**Summary:**
+
+In preparing the Berlin marathon data for out of sample prediction with the XGBoost model, we first removed unavailable predictors (marathon identifier and CO concentration) from both the training and Berlin datasets to ensure a consistent feature space. The training model matrix was rebuilt and the XGBoost model retrained using only the remaining predictors.
+
+Categorical predictors in the Berlin dataset were explicitly aligned to match the levels in the training data, ensuring correct encoding. Since model.matrix() automatically drops rows with missing predictor values, we restricted the Berlin dataset to complete cases before building the design matrix and making predictions. The Berlin feature matrix was then aligned to the training feature space to prevent feature mismatches.
+Predictions were made only on the complete case rows, and model performance was evaluated using RMSE, MAE, and R2. 
+
+It is important to note that we also tracked how many Berlin observations were dropped due to missing predictors to maintain transparency. 
+
 
 ------------------------
 # Inactive / Archived Code
@@ -2375,16 +2442,6 @@ final_data <- final_data %>%
   mutate(
     covid_era = ifelse(year == 2020, 1, 0)
   )
-
-
-replacing the numeric variables with missing data with mean (could do median if we keep this); most likely dropping though (ZD)
-numeric_vars <- final_data %>%
-  select(where(is.numeric)) %>%
-  names()
-
-final_data <- final_data %>%
-  mutate(across(all_of(numeric_vars), ~ifelse(is.na(.), mean(., na.rm = TRUE), .)))
-
 
 
 create custom cutoff times for performance groups (ZD)
