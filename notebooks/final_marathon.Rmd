@@ -30,8 +30,8 @@ library(combinat)
 library(glmnet)
 library(xgboost)
 library(Metrics)
+library(fastDummies)
 library(SHAPforxgboost)
-
 ```
 
 # Import, clean, and join all raw data (KB)
@@ -1322,15 +1322,11 @@ We can see that ozone and pm25 were successfully removed from both datasets and 
 Attempt for XGboost model containing the engineered features, binned features, and scaled features: (ZD)
 ```{r}
 # Remove identifiers before creating model matrix
-# Convert dataset to numeric-only matrix
-#train_matrix <- model.matrix(
-#  avg_chip_seconds ~ . - 1,
+#Convert dataset to numeric-only matrix
+#train_matrix2 <- model.matrix(
+#  avg_chip_seconds ~ .,
 #  data = train_data %>% select(-year, -n)
 #)
-
-
-#To add library above
-library(fastDummies)
 
 train_matrix <- train_data %>%
   select(-year, -n, -avg_chip_seconds) %>%
@@ -1602,19 +1598,45 @@ test_data_raw  <- as.data.frame(main_data[-train_index, ])
 Remove identifiers before creating model matrix (ZD, KB)
 ```{r}
 # Convert dataset to numeric-only matrix
-train_matrix_raw <- model.matrix(
-  avg_chip_seconds ~ .,
-  data = train_data_raw %>% select(-year, -n)
-)
+#train_matrix_raw <- model.matrix(
+#  avg_chip_seconds ~ .,
+#  data = train_data_raw %>% select(-year, -n)
+#)
 
-test_matrix_raw <- model.matrix(
-  avg_chip_seconds ~ .,
-  data = test_data_raw %>% select(-year, -n)
-)
+#test_matrix_raw <- model.matrix(
+#  avg_chip_seconds ~ .,
+#  data = test_data_raw %>% select(-year, -n)
+#)
 
 # Remove intercept from both matrices
-train_matrix_raw <- train_matrix_raw[, colnames(train_matrix_raw) != "(Intercept)"]
-test_matrix_raw  <- test_matrix_raw[,  colnames(test_matrix_raw)  != "(Intercept)"]
+#train_matrix_raw <- train_matrix_raw[, colnames(train_matrix_raw) != "(Intercept)"]
+#test_matrix_raw  <- test_matrix_raw[,  colnames(test_matrix_raw)  != "(Intercept)"]
+
+
+
+
+train_matrix_raw <- train_data_raw %>%
+  select(-year, -n, -avg_chip_seconds) %>%
+  fastDummies::dummy_cols(
+    select_columns = c("marathon","subgroup","gender"),
+    remove_first_dummy = FALSE,
+    remove_selected_columns = TRUE
+  ) %>%
+ mutate(across(everything(), ~ as.numeric(.))) %>%  # convert all columns to numeric
+  as.matrix()
+
+
+test_matrix_raw <- test_data_raw %>%
+  select(-year, -n, -avg_chip_seconds) %>%
+  fastDummies::dummy_cols(
+    select_columns = c("marathon","subgroup","gender"),
+    remove_first_dummy = FALSE,
+    remove_selected_columns = TRUE
+  ) %>%
+  mutate(across(everything(), ~ as.numeric(.))) %>%  # convert all columns to numeric
+  as.matrix()
+
+
 
 
 # Convert to DMatrix format for tuning, needed for cross validation
@@ -1957,8 +1979,8 @@ Marathon location proves to be important in determining race results. Elite runn
 #plot for elite subgroup
 elite <- shap.plot.dependence(
   shap_long,
-  x = "pm25_bin1",
-  color_feature = "subgroupelite"
+  x = "pm25_bin_1",
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -1966,24 +1988,24 @@ elite_points <- elite$data
 #repeated for competitive subgroup
 comp <- shap.plot.dependence(
   shap_long,
-  x = "pm25_bin1",
-  color_feature = "subgroupcompetitive"
+  x = "pm25_bin_1",
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
 #repeated for recreational subgroup
 rec <- shap.plot.dependence(
   shap_long,
-  x = "pm25_bin1",
-  color_feature = "subgrouprecreational"
+  x = "pm25_bin_1",
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
 #repeated for slow subgroup
 slow <- shap.plot.dependence(
   shap_long,
-  x = "pm25_bin1",
-  color_feature = "subgroupslow"
+  x = "pm25_bin_1",
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2030,7 +2052,7 @@ Low PM2.5 values equate to a minimal effect on finishing time. Moderate PM2.5 va
 shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "gendermale"
+  color_feature = "gender_male"
 )
 
 
@@ -2038,7 +2060,7 @@ shap.plot.dependence(
 gender <- shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "gendermale"
+  color_feature = "gender_male"
 )
 #SHAP values broken down by 1 (male) or 0 (female) and relevant color.
 gender_points <- gender$data
@@ -2072,7 +2094,7 @@ ggplot(gender_points, aes(x = x_feature, y = value, color = color_value)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2081,7 +2103,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2089,7 +2111,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2097,7 +2119,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "avg_temp",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2140,8 +2162,8 @@ Temperature displays a much clearer impact than the PM2.5 results. At lower temp
 #plot for elite subgroup
 elite <- shap.plot.dependence(
   shap_long,
-  x = "ozone_bin1",
-  color_feature = "subgroupelite"
+  x = "ozone_bin_1",
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2149,24 +2171,24 @@ elite_points <- elite$data
 #repeated for competitive subgroup
 comp <- shap.plot.dependence(
   shap_long,
-  x = "ozone_bin1",
-  color_feature = "subgroupcompetitive"
+  x = "ozone_bin_1",
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
 #repeated for recreational subgroup
 rec <- shap.plot.dependence(
   shap_long,
-  x = "ozone_bin1",
-  color_feature = "subgrouprecreational"
+  x = "ozone_bin_1",
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
 #repeated for slow subgroup
 slow <- shap.plot.dependence(
   shap_long,
-  x = "ozone_bin1",
-  color_feature = "subgroupslow"
+  x = "ozone_bin_1",
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2211,7 +2233,7 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "wind_speed",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2220,7 +2242,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "wind_speed",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2228,7 +2250,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "wind_speed",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2236,7 +2258,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "wind_speed",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2277,7 +2299,7 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "dew_point",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2286,7 +2308,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "dew_point",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2294,7 +2316,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "dew_point",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2302,7 +2324,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "dew_point",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2343,7 +2365,7 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "no2",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2352,7 +2374,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "no2",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2360,7 +2382,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "no2",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2368,7 +2390,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "no2",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2410,7 +2432,7 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "co",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2419,7 +2441,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "co",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2427,7 +2449,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "co",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2435,7 +2457,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "co",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2477,7 +2499,7 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
 elite <- shap.plot.dependence(
   shap_long,
   x = "temp_aqi_interaction",
-  color_feature = "subgroupelite"
+  color_feature = "subgroup_elite"
 )
 #SHAP values broken down by 1 (elite) or 0 (not-elite) and relevant color.
 elite_points <- elite$data
@@ -2486,7 +2508,7 @@ elite_points <- elite$data
 comp <- shap.plot.dependence(
   shap_long,
   x = "temp_aqi_interaction",
-  color_feature = "subgroupcompetitive"
+  color_feature = "subgroup_competitive"
 )
 comp_points <- comp$data
 
@@ -2494,7 +2516,7 @@ comp_points <- comp$data
 rec <- shap.plot.dependence(
   shap_long,
   x = "temp_aqi_interaction",
-  color_feature = "subgrouprecreational"
+  color_feature = "subgroup_recreational"
 )
 rec_points <- rec$data
 
@@ -2502,7 +2524,7 @@ rec_points <- rec$data
 slow <- shap.plot.dependence(
   shap_long,
   x = "temp_aqi_interaction",
-  color_feature = "subgroupslow"
+  color_feature = "subgroup_slow"
 )
 slow_points <- slow$data
 
@@ -2539,11 +2561,13 @@ ggplot(all_points, aes(x = x_feature, y = value, color = group)) +
   labs(x = "TempXAQI", y = "SHAP value", color = "Group")
 ```
 ```{r}
+
+
 #plot for gender:male 
 gender <- shap.plot.dependence(
   shap_long,
   x = "temp_aqi_interaction",
-  color_feature = "gendermale"
+  color_feature = "gender_male"
 )
 #SHAP values broken down by 1 (male) or 0 (female) and relevant color.
 gender_points <- gender$data
@@ -2570,20 +2594,6 @@ ggplot(gender_points, aes(x = x_feature, y = value, color = color_value)) +
   theme_minimal()
 
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
