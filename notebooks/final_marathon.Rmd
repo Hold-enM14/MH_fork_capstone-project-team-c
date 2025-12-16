@@ -1240,6 +1240,7 @@ results_PM25bin <- evaluate(lm_initial_PM25bin, test_data_scaled)
 
 Compare results (ZD/MH) 
 ```{r}
+set.seed(123)
 
 model_compare_train <- data.frame(
   Model = c("PM2.5 Bin Train"),
@@ -1367,6 +1368,8 @@ dtest  <- xgb.DMatrix(test_matrix,  label = test_data$avg_chip_seconds)
 
 # Create our inital untuned basline XGBoost model (ZD, KB)
 ```{r}
+set.seed(123)
+
 xgb_base <- xgboost(
   data = dtrain,
   nrounds = 200,
@@ -1392,7 +1395,7 @@ tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds
 r2_train <- 1 - (rss_train / tss_train)
 
 # Calculate R-squared for test data
-rss_test <- sum((test_data$avg_chip_seconds - pred_train_xgb)^2)  # Residual sum of squares
+rss_test <- sum((test_data$avg_chip_seconds - pred_test_xgb)^2)  # Residual sum of squares
 tss_test <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)  # Total sum of squares
 r2_test <- 1 - (rss_test / tss_test)
 
@@ -1420,6 +1423,8 @@ To make sure our XGBoost model is as accurate and reliable as possible, we built
 
 Need to undo the #'s if want to run the long loop. 
 ```{r}
+#set.seed(42)
+
 #params_grid <- expand.grid(
 #  max_depth = c(2, 3, 4),
 #  min_child_weight = c(3, 5, 10),
@@ -1462,7 +1467,6 @@ Need to undo the #'s if want to run the long loop.
 #    best_iter = cv$best_iteration
 #  )
 #}
-
 ```
 
 Next extract the best hyperparameters (KB)
@@ -1482,7 +1486,101 @@ Need to undo the #'s if want to run the long loop and see the best parameters an
 
 ```
 
+**Output: **
+(set.seed(42))
+
+$objective
+[1] "reg:squarederror"
+
+$max_depth
+[1] 4
+
+$min_child_weight
+[1] 5
+
+$subsample
+[1] 0.8
+
+$colsample_bytree
+[1] 0.8
+
+$eta
+[1] 0.1
+
+$gamma
+[1] 0.1
+
+$lambda
+[1] 1
+
+$alpha
+[1] 0
+
+[1] 1248
+
+
 ### Running XGBoost model with the best hyperparameters explicitly added (KB)
+
+Running XGBoost model with the best hyperparameters 
+Need to undo the #'s if want to run the long loop and see the best parameters and nrounds. 
+```{r}
+#set.seed(42)
+
+# Set best hyperparameters
+#xgb_model <- xgb.train(
+#  params  = best_params,
+#  data    = dtrain,
+#  nrounds = best_nrounds,
+#  verbose = 0
+#)
+
+# Predictions on train and test sets
+#pred_train <- predict(xgb_model, dtrain)
+#pred_test  <- predict(xgb_model, dtest)
+
+# Train metrics
+#rmse_train <- rmse(train_data$avg_chip_seconds, pred_train)
+#mae_train <- mae(train_data$avg_chip_seconds, pred_train)
+#rss_train <- sum((train_data$avg_chip_seconds - pred_train)^2)
+#tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds))^2)
+#r2_train  <- 1 - rss_train / tss_train
+
+# Test metrics
+#rmse_test <- rmse(test_data$avg_chip_seconds, pred_test)
+#mae_test  <- mae(test_data$avg_chip_seconds, pred_test)
+#rss_test  <- sum((test_data$avg_chip_seconds - pred_test)^2)
+#tss_test  <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)
+#r2_test   <- 1 - rss_test / tss_test
+
+
+# Combine into a single table
+#model_eval <- data.frame(
+#  Metric = c("Train RMSE", "Train MAE", "Train R2",
+#             "CV RMSE",
+#             "Test RMSE", "Test MAE", "Test R2"),
+#  Value  = c(rmse_train, mae_train, r2_train,
+#             cv_rmse,
+#             rmse_test, mae_test, r2_test)
+#)
+
+# Display table
+#knitr::kable(model_eval, digits = 4, caption = "XGBoost (Engineered Features) Model Best Hyperparameters - #Overfitting Check")
+
+
+```
+
+**Output: **
+set.seed(42)
+XGBoost (Engineered Features) Model Best Hyperparameters - Overfitting Check
+Metric	Value
+Train RMSE	31.2820
+Train MAE	23.6533
+Train R2	0.9999
+CV RMSE	164.6655
+Test RMSE	127.4087
+Test MAE	82.1464
+Test R2	0.9987
+
 
 This way you don't have to run the tuning loop, since it takes up a lot of time (KB)
 ```{r}
@@ -1492,16 +1590,16 @@ set.seed(42)
 best_params <- list(
   objective = "reg:squarederror",
   max_depth = 4,
-  min_child_weight = 10,
+  min_child_weight = 5,
   subsample = 0.8,
   colsample_bytree = 0.8,
   eta = 0.1,
-  gamma = 0,
-  lambda = 0.5,
+  gamma = 0.1,
+  lambda = 1,
   alpha = 0
 )
 
-best_nrounds <- 1498   # from tuning
+best_nrounds <- 1248   # from updated tuning
 
 # Train final XGBoost model
 xgb_model <- xgboost(
@@ -1511,12 +1609,9 @@ xgb_model <- xgboost(
   verbose = FALSE
 )
 
-
-
 # Predictions on train and test sets
 pred_train <- predict(xgb_model, dtrain)
 pred_test  <- predict(xgb_model, dtest)
-
 
 # Train metrics
 rmse_train <- rmse(train_data$avg_chip_seconds, pred_train)
@@ -1525,10 +1620,8 @@ rss_train <- sum((train_data$avg_chip_seconds - pred_train)^2)
 tss_train <- sum((train_data$avg_chip_seconds - mean(train_data$avg_chip_seconds))^2)
 r2_train  <- 1 - rss_train / tss_train
 
-
 # CV RMSE from tuning
-cv_rmse <- 151.6136  # manually use the CV RMSE from previous results
-
+cv_rmse <- 164.6655  # manually use the CV RMSE from latest tuning
 
 # Test metrics
 rmse_test <- rmse(test_data$avg_chip_seconds, pred_test)
@@ -1536,7 +1629,6 @@ mae_test  <- mae(test_data$avg_chip_seconds, pred_test)
 rss_test  <- sum((test_data$avg_chip_seconds - pred_test)^2)
 tss_test  <- sum((test_data$avg_chip_seconds - mean(test_data$avg_chip_seconds))^2)
 r2_test   <- 1 - rss_test / tss_test
-
 
 # Combine into a single table
 model_eval <- data.frame(
@@ -1551,7 +1643,9 @@ model_eval <- data.frame(
 # Display table
 knitr::kable(model_eval, digits = 4, caption = "XGBoost (Engineered Features) Model Best Hyperparameters - Overfitting Check")
 
+
 ```
+
 
 **NOTE** Models may be slightly different with small fluctuations that are likely due to sampling variability.
 
@@ -1613,8 +1707,6 @@ Remove identifiers before creating model matrix (ZD, KB)
 #test_matrix_raw  <- test_matrix_raw[,  colnames(test_matrix_raw)  != "(Intercept)"]
 
 
-
-
 train_matrix_raw <- train_data_raw %>%
   select(-year, -n, -avg_chip_seconds) %>%
   fastDummies::dummy_cols(
@@ -1646,6 +1738,8 @@ dtest_raw  <- xgb.DMatrix(data = test_matrix_raw,  label = test_data_raw$avg_chi
 
 # Create our inital untuned basline for the raw features XGBoost model (ZD, KB)
 ```{r}
+set.seed(42)
+
 xgb_base_raw <- xgboost(
   data = dtrain_raw,
   nrounds = 200,
@@ -1744,7 +1838,53 @@ Need to undo the #'s if want to run the long loop.
 
 ```
 
+```{r}
+set.seed(42)
 
+params_grid_raw <- expand.grid(
+  max_depth = c(2, 3, 4),
+  min_child_weight = c(3, 5, 10),
+  subsample = c(0.7, 0.8),
+  colsample_bytree = c(0.6, 0.8),
+  eta = c(0.05, 0.1),
+  gamma = c(0, 0.1),
+  lambda = c(0.5, 1),
+  alpha = c(0, 1)
+)
+
+results_raw <- list()
+
+for (i in 1:nrow(params_grid_raw)) {
+  
+  params <- list(
+    objective = "reg:squarederror",
+    max_depth = params_grid_raw$max_depth[i],
+     min_child_weight = params_grid_raw$min_child_weight[i],
+    subsample = params_grid_raw$subsample[i],
+    colsample_bytree = params_grid_raw$colsample_bytree[i],
+    eta = params_grid_raw$eta[i],
+    gamma = params_grid_raw$gamma[i],
+    lambda = params_grid_raw$lambda[i],
+    alpha = params_grid_raw$alpha[i]
+  )
+  
+  cv_raw <- xgb.cv(
+    params = params,
+    data = dtrain_raw,      
+    nrounds = 1500,
+    nfold = 5,
+    early_stopping_rounds = 30,
+    verbose = 0
+  )
+  
+  results_raw[[i]] <- list(
+    params = params,
+    best_rmse = min(cv_raw$evaluation_log$test_rmse_mean),
+    best_iter = cv_raw$best_iteration
+  )
+}
+
+```
 Next extract the best hyperparameters (KB)
 
 Need to undo the #'s if want to run the long loop and see the best parameters and nrounds. 
@@ -2905,7 +3045,7 @@ final_data <- final_data %>%
   
   
 #The following chunk was used to understand the breakdown between marathons, but was not discussed or actively used for data cleaning or model generation.
-```{r}
+
 #Boston
 boston <- final_data %>% filter(marathon=="Boston")
 
@@ -3233,7 +3373,7 @@ ggplot(NYC, aes(x = "", y =avg_chip_seconds / 3600)) +
   theme(axis.title.x = element_blank(),
         axis.text.x  = element_blank(),
         axis.ticks.x = element_blank())
-```
+
   
   
   
