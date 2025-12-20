@@ -26,7 +26,7 @@ Can weather and environmental factors—such as temperature, wind speed, precipi
 
 - `data`: Contains the raw datasets and data dictionary.
 - `notebooks`: Contains the `final-marathon.Rmd` and `archived-notebooks`/ subfolder with older .Rmd files retained for reference.
-- `reports`: Contains the `Final-Marathon-Report.pdf` and `archived-reports`/ subfolder with historic predecessor reports that show the progression and changes during this project.
+- `reports`: Contains the `Final-Marathon-Report.html`, Final-Marathon-Report.pdf, and `archived-reports`/ subfolder with historic predecessor reports that show the progression and changes during this project.
 - `capstone-project-team-c.Rproj`: The RStudio Project file. Opening this file sets the project root directory.
 - `README.md`: Project overview and instructions.
 - `rev.lock`: Records the exact R package versions used to ensure reproducibility.
