@@ -33,7 +33,7 @@ Can weather and environmental factors—such as temperature, wind speed, precipi
 - `renv`: Directory managed by `renv` that stores the project’s R package library and environment metadata.
 
 ## Custom Functions
-There are two custom functions written and executed within the repo `final_marathon.rmd`:
+There are two custom functions written and executed within the notebook `final_marathon.rmd`:
 - `clean_chip_time`: cleans and standardizes chip-time values during early data cleaning steps
 - `evaluate`: creates a list based on inputted model returning RMSE, MAE, R2, preds, and actual that are used for evaluation and graphing of linear model
 
